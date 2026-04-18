@@ -32,7 +32,30 @@ def extract_gemini_text(response: Dict) -> str:
         return str(response)
 
     if "candidates" in response and isinstance(response["candidates"], list):
-        return response["candidates"][0].get("content", "")
+        for candidate in response["candidates"]:
+            if not isinstance(candidate, dict):
+                continue
+            content = candidate.get("content")
+            if isinstance(content, dict):
+                parts = content.get("parts")
+                if isinstance(parts, list):
+                    texts = []
+                    for part in parts:
+                        if isinstance(part, dict):
+                            if "text" in part and isinstance(part["text"], str):
+                                texts.append(part["text"])
+                            elif "content" in part and isinstance(part["content"], dict):
+                                nested = part["content"].get("text")
+                                if isinstance(nested, str):
+                                    texts.append(nested)
+                    if texts:
+                        return "\n".join(texts).strip()
+            if isinstance(content, list):
+                texts = [item.get("text", "") for item in content if isinstance(item, dict) and item.get("text")]
+                if texts:
+                    return "\n".join(texts).strip()
+            if isinstance(content, str):
+                return content.strip()
 
     if "output" in response:
         output = response["output"]
@@ -49,10 +72,10 @@ def extract_gemini_text(response: Dict) -> str:
                 if "text" in first:
                     return first["text"].strip()
 
-    if "text" in response:
+    if "text" in response and isinstance(response["text"], str):
         return response["text"].strip()
 
-    if "transcription" in response:
+    if "transcription" in response and isinstance(response["transcription"], str):
         return response["transcription"].strip()
 
     return str(response)
@@ -63,28 +86,26 @@ async def query_gemini(prompt: str) -> str:
         return "Gemini API не настроен. Пожалуйста, установите GEMINI_API_KEY в .env."
 
     url = config.GEMINI_API_URL
-    headers = {"Content-Type": "application/json"}
-    is_chat = "chat" in url or "chat-bison" in url
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": config.GEMINI_API_KEY,
+    }
 
     payload = {
-        "prompt": {
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
-        },
-        "temperature": 0.7,
-        "maxOutputTokens": 512,
-    } if is_chat else {
-        "prompt": prompt,
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
         "temperature": 0.7,
         "maxOutputTokens": 512,
     }
 
-    params = {"key": config.GEMINI_API_KEY}
-
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, params=params, headers=headers, json=payload, timeout=60) as response:
+            async with session.post(url, headers=headers, json=payload, timeout=60) as response:
                 text = await response.text()
                 if response.status != 200:
                     logger.error(f"Gemini API error {response.status}: {text}")
@@ -103,31 +124,46 @@ async def generate_image_gemini(prompt: str) -> bytes:
         raise ValueError("Gemini API не настроен.")
 
     url = config.GEMINI_IMAGEN_API_URL
-    headers = {"Content-Type": "application/json"}
-    params = {"key": config.GEMINI_API_KEY}
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": config.GEMINI_API_KEY,
+    }
 
     payload = {
-        "prompt": {"text": prompt},
-        "generationConfig": {
-            "numberOfImages": 1,
-            "aspectRatio": "1:1",
-            "personGeneration": "allow_adult"
-        }
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ]
     }
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, params=params, headers=headers, json=payload, timeout=60) as response:
+            async with session.post(url, headers=headers, json=payload, timeout=60) as response:
                 text = await response.text()
                 if response.status != 200:
                     logger.error(f"Gemini Imagen API error {response.status}: {text}")
                     raise Exception(f"Ошибка Gemini Imagen API: {response.status}")
 
                 data = await response.json()
-                if "candidates" in data and data["candidates"]:
-                    image_data = data["candidates"][0].get("output", {}).get("image", {}).get("data")
-                    if image_data:
-                        return base64.b64decode(image_data)
+                if "candidates" in data and isinstance(data["candidates"], list):
+                    for candidate in data["candidates"]:
+                        if not isinstance(candidate, dict):
+                            continue
+                        content = candidate.get("content")
+                        if isinstance(content, dict):
+                            parts = content.get("parts")
+                            if isinstance(parts, list):
+                                for part in parts:
+                                    if not isinstance(part, dict):
+                                        continue
+                                    inline_data = part.get("inlineData")
+                                    if isinstance(inline_data, dict):
+                                        image_data = inline_data.get("data")
+                                        if image_data:
+                                            return base64.b64decode(image_data)
                 raise Exception("Не удалось получить изображение.")
     except Exception as exc:
         logger.exception("Gemini image generation failed")

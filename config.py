@@ -45,14 +45,14 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "whisper-1")
 GROQ_API_URL = os.getenv("GROQ_API_URL", f"https://api.groq.io/v1/whisper?model={GROQ_MODEL}")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "text-bison-001")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
 GEMINI_API_URL = os.getenv(
     "GEMINI_API_URL",
-    f"https://gemini.googleapis.com/v1/models/{GEMINI_MODEL}:generate",
+    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
 )
 GEMINI_IMAGEN_API_URL = os.getenv(
     "GEMINI_IMAGEN_API_URL",
-    "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:generateImage"
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
 )
 
 # ==================== Configuration helpers ====================
