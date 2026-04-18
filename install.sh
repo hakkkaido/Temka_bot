@@ -14,6 +14,20 @@ NC='\033[0m' # No Color
 REPO_URL="https://github.com/hakkkaido/Temka_bot.git"
 INSTALL_DIR="/opt/Temka_bot"
 SERVICE_NAME="temka_bot"
+REINSTALL_MODE=false
+PRESERVE_ENV=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --reinstall|-r)
+      REINSTALL_MODE=true
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 # --- Функции ---
 function print_info {
@@ -63,6 +77,25 @@ fi
 
 cd "$INSTALL_DIR"
 
+if [ "$REINSTALL_MODE" == "true" ]; then
+    print_info "Запуск быстрой переустановки проекта Temka_bot..."
+    if [ -f ".env" ]; then
+        print_info "Сохраняем существующий файл .env и восстановим после переустановки..."
+        cp .env .env.reinstall.bak
+        PRESERVE_ENV=true
+        rm -f .env
+    fi
+
+    if [ -d "venv" ]; then
+        print_info "Удаляем старое виртуальное окружение..."
+        rm -rf venv
+    fi
+
+    print_info "Очищаем временные файлы Python..."
+    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find . -type f -name "*.pyc" -delete 2>/dev/null || true
+fi
+
 # 4. Создание и активация виртуального окружения
 print_info "Создание виртуального окружения Python в '$INSTALL_DIR/venv'..."
 python3 -m venv venv
@@ -82,81 +115,89 @@ else
 fi
 
 # 6. Настройка конфигурации (.env файл)
-echo ""
-echo "==========================================================="
-echo "    Конфигурация"
-echo "==========================================================="
-echo ""
-echo "Требуется следующая информация:"
-echo ""
-echo "❶ Telegram Bot Token"
-echo "   Получите от @BotFather в Telegram"
-echo ""
-while true; do
-    read -p "   Bot Token: " TELEGRAM_TOKEN
-    if [[ "$TELEGRAM_TOKEN" =~ ^[0-9]+:.+$ ]]; then
-        break
+if [ "$PRESERVE_ENV" != "true" ]; then
+    echo ""
+    echo "==========================================================="
+    echo "    Конфигурация"
+    echo "==========================================================="
+    echo ""
+    echo "Требуется следующая информация:"
+    echo ""
+    echo "❶ Telegram Bot Token"
+    echo "   Получите от @BotFather в Telegram"
+    echo ""
+    while true; do
+        read -p "   Bot Token: " TELEGRAM_TOKEN
+        if [[ "$TELEGRAM_TOKEN" =~ ^[0-9]+:.+$ ]]; then
+            break
+        fi
+        print_warn "   Неверный формат. Должен быть: 123456:ABC-DEF..."
+    done
+
+    echo ""
+    echo "❷ Ваш Chat ID (User ID)"
+    echo "   Получите от @userinfobot в Telegram"
+    echo "   Это нужно для безопасности - только вы сможете использовать бота"
+    echo ""
+    while true; do
+        read -p "   Chat ID: " TELEGRAM_CHAT_ID
+        if [[ "$TELEGRAM_CHAT_ID" =~ ^[0-9]+$ ]]; then
+            break
+        fi
+        print_warn "   Неверный формат. Должно быть число: 987654321"
+    done
+
+    echo ""
+    echo "❸ Groq API Key (опционально, для голосовых сообщений)"
+    echo "   Бесплатный ключ: https://console.groq.com/keys"
+    echo "   Нажмите Enter чтобы пропустить"
+    echo ""
+    read -sp "   Groq API Key: " GROQ_API_KEY
+    echo ""
+
+    echo ""
+    echo "❹ Google Gemini API Key (опционально, для интеграции с Gemini)"
+    echo "   Получите на https://ai.google.dev/"
+    echo "   Нажмите Enter чтобы пропустить"
+    echo ""
+    read -sp "   Gemini API Key: " GEMINI_API_KEY
+    echo ""
+
+    echo "❺ Хотите сделать бота доступным по ссылке для всех пользователей? (y/n)"
+    echo "   Если выбрать 'y', бот будет работать в публичном режиме и принимать сообщения от любых пользователей."
+    echo ""
+    read -p "   Публичный режим (y/n): " BOT_PUBLIC_CHOICE
+    if [[ "$BOT_PUBLIC_CHOICE" == "y" || "$BOT_PUBLIC_CHOICE" == "Y" ]]; then
+        BOT_PUBLIC=true
+    else
+        BOT_PUBLIC=false
     fi
-    print_warn "   Неверный формат. Должен быть: 123456:ABC-DEF..."
-done
 
-echo ""
-echo "❷ Ваш Chat ID (User ID)"
-echo "   Получите от @userinfobot в Telegram"
-echo "   Это нужно для безопасности - только вы сможете использовать бота"
-echo ""
-while true; do
-    read -p "   Chat ID: " TELEGRAM_CHAT_ID
-    if [[ "$TELEGRAM_CHAT_ID" =~ ^[0-9]+$ ]]; then
-        break
+    echo "" > .env # Создаем или очищаем .env файл
+    echo "TELEGRAM_TOKEN=\"$TELEGRAM_TOKEN\"" >> .env
+    if [[ "$BOT_PUBLIC" == "true" ]]; then
+        echo "BOT_PUBLIC=true" >> .env
+    else
+        echo "TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID" >> .env
     fi
-    print_warn "   Неверный формат. Должно быть число: 987654321"
-done
 
-echo ""
-echo "❸ Groq API Key (опционально, для голосовых сообщений)"
-echo "   Бесплатный ключ: https://console.groq.com/keys"
-echo "   Нажмите Enter чтобы пропустить"
-echo ""
-read -sp "   Groq API Key: " GROQ_API_KEY
-echo ""
+    if [ ! -z "$GROQ_API_KEY" ]; then
+        echo "GROQ_API_KEY=\"$GROQ_API_KEY\"" >> .env
+    fi
 
-echo ""
-echo "❹ Google Gemini API Key (опционально, для интеграции с Gemini)"
-echo "   Получите на https://ai.google.dev/"
-echo "   Нажмите Enter чтобы пропустить"
-echo ""
-read -sp "   Gemini API Key: " GEMINI_API_KEY
-echo ""
+    if [ ! -z "$GEMINI_API_KEY" ]; then
+        echo "GEMINI_API_KEY=\"$GEMINI_API_KEY\"" >> .env
+    fi
 
-echo "❺ Хотите сделать бота доступным по ссылке для всех пользователей? (y/n)"
-echo "   Если выбрать 'y', бот будет работать в публичном режиме и принимать сообщения от любых пользователей."
-echo ""
-read -p "   Публичный режим (y/n): " BOT_PUBLIC_CHOICE
-if [[ "$BOT_PUBLIC_CHOICE" == "y" || "$BOT_PUBLIC_CHOICE" == "Y" ]]; then
-    BOT_PUBLIC=true
+    chmod 600 .env
+    print_info ".env файл успешно создан и защищен (chmod 600)."
 else
-    BOT_PUBLIC=false
+    if [ -f ".env.reinstall.bak" ]; then
+        mv .env.reinstall.bak .env
+        chmod 600 .env
+        print_info "Файл .env восстановлен после переустановки."
+    fi
 fi
-
-echo "" > .env # Создаем или очищаем .env файл
-echo "TELEGRAM_TOKEN=\"$TELEGRAM_TOKEN\"" >> .env
-if [[ "$BOT_PUBLIC" == "true" ]]; then
-    echo "BOT_PUBLIC=true" >> .env
-else
-    echo "TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID" >> .env
-fi
-
-if [ ! -z "$GROQ_API_KEY" ]; then
-    echo "GROQ_API_KEY=\"$GROQ_API_KEY\"" >> .env
-fi
-
-if [ ! -z "$GEMINI_API_KEY" ]; then
-    echo "GEMINI_API_KEY=\"$GEMINI_API_KEY\"" >> .env
-fi
-
-chmod 600 .env
-print_info ".env файл успешно создан и защищен (chmod 600)."
 
 # 7. Настройка systemd сервиса (для автозапуска)
 read -p "Хотите создать systemd сервис для автозапуска бота? (y/n): " CREATE_SERVICE
@@ -200,6 +241,13 @@ EOL
     systemctl status $SERVICE_NAME --no-pager
 else
     print_warn "Пропускаем создание systemd сервиса."
+fi
+
+if [ "$REINSTALL_MODE" == "true" ] && [ -f "/etc/systemd/system/$SERVICE_NAME.service" ]; then
+    print_info "Обнаружен ранее созданный systemd сервис '$SERVICE_NAME'. Перезагружаем сервис..."
+    systemctl daemon-reload
+    systemctl restart $SERVICE_NAME
+    print_info "Сервис $SERVICE_NAME перезапущен."
 fi
 
 print_info "==========================================================="
