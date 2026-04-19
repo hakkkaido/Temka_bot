@@ -110,6 +110,11 @@ if [ -f "requirements.txt" ]; then
     if [ $? -ne 0 ]; then
         print_error "Не удалось установить Python-зависимости. Проверьте файл requirements.txt."
     fi
+    print_info "Установка google-genai для поддержки Gemini..."
+    venv/bin/pip install -q -U google-genai > /dev/null
+    if [ $? -ne 0 ]; then
+        print_error "Не удалось установить пакет google-genai."
+    fi
 else
     print_warn "Файл requirements.txt не найден. Пропускаем установку Python-зависимостей."
 fi

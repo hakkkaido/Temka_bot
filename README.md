@@ -14,6 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/hakkkaido/Temka_bot/main/install.sh
 - Установит все необходимые зависимости (Python, Git и т.д.)
 - Клонирует проект (или установит из текущей директории)
 - Создаст виртуальное окружение Python
+- Установит пакет `google-genai` для поддержки Gemini
 - Запросит необходимые API ключи
 - Опционально создаст systemd сервис для автозапуска
 
